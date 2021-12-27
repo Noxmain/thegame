@@ -12,6 +12,30 @@ for (let i = 2; i <= 99; i++) {n.push(i);}
 let card_pile = [];
 while (n.length > 0) {card_pile.push(n.splice(Math.floor(Math.random() * n.length), 1)[0]);}
 
+Object.prototype.copy = function() {
+  let copy = {};
+  for (let key in this) {
+    if (typeof(this[key]) == "object") {
+      copy[key] = this[key].copy();
+    } else {
+      copy[key] = this[key];
+    }
+  }
+  return copy;
+};
+
+Array.prototype.copy = function() {
+  let copy = [];
+  for (let key = 0; key < this.length; key++) {
+    if (typeof(this[key]) == "object") {
+      copy[key] = this[key].copy();
+    } else {
+      copy[key] = this[key];
+    }
+  }
+  return copy;
+};
+
 function CardObject(x, y) {
   this.x = x;
   this.y = y;
@@ -58,6 +82,7 @@ function Card(x, y, n) {
       if (i.is_valid(this.n) && i.is_inside(this.x, this.y)) {
         i.n = this.n;
         cards.splice(cards.indexOf(this), 1);
+        undo_push();
         return;
       }
     }
@@ -76,6 +101,7 @@ function Card(x, y, n) {
         this.y = i.y;
         this.px = i.x;
         this.py = i.y;
+        undo_push();
         return;
       }
     }
@@ -194,6 +220,36 @@ function Button(x, y, w, h, t, click) {
   };
 }
 
+let undo = [];
+let undo_double = true;
+function undo_push() {
+  undo.push({
+    card_pile: card_pile.copy(),
+    cards: cards.copy(),
+    places: places.map(z => z.n),
+  });
+  undo_double = true;
+}
+function undo_pop() {
+  if (undo.length > 0) {
+    let e = undo.pop();
+    card_pile = e.card_pile.copy();
+    cards = e.cards.copy();
+    for (let i = 0; i < places.length; i++) {
+      places[i].n = e.places[i];
+    }
+    if (cards.length <= hand_cards - 2) {
+      buttons[1].enabled = true;
+    } else {
+      buttons[1].enabled = false;
+    }
+  }
+  if (undo_double) {
+    undo_double = false;
+    undo_pop();
+  }
+}
+
 let cards = [];
 let slots = [];
 let places = [];
@@ -238,12 +294,18 @@ function setup() {
           cards[i].py = slots[i].y;
         }
       }
+      undo_push();
     }
   ));
   buttons.push(new Button(width / 13 * 10, height / 4.25 * 2.65, card_width, card_height / 5, "Zug beenden",
-    function() {for (let i of slots) {i.update();} this.enabled = false;}
+    function() {
+      for (let i of slots) {i.update();}
+      this.enabled = false;
+      undo_push();
+    }
   ));
   buttons[1].enabled = false;
+  undo_push();
 }
 
 function draw() {
@@ -280,6 +342,8 @@ function mouseReleased(e) {
   }
   if (cards.length <= hand_cards - 2) {
     buttons[1].enabled = true;
+  } else {
+    buttons[1].enabled = false;
   }
 }
 
@@ -288,6 +352,12 @@ function mouseDragged(e) {
     if (i.dragging) {
       i.drag(e.movementX, e.movementY);
     }
+  }
+}
+
+function keyPressed(e) {
+  if (e.key == "z") {
+    undo_pop();
   }
 }
 
